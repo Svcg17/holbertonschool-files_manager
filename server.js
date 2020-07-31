@@ -12,6 +12,8 @@ app.use('/', router);
 app.use('/status', router);
 app.use('/stats', router);
 app.use('/users', router);
+app.use('/connect', router);
+app.use('/disconnect', router);
 
 app.listen(port);
 
