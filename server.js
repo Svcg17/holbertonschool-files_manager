@@ -14,6 +14,7 @@ app.use('/stats', router);
 app.use('/users', router);
 app.use('/connect', router);
 app.use('/disconnect', router);
+app.use('/files', router);
 
 app.listen(port);
 
