@@ -1,5 +1,7 @@
 const sha1 = require('sha1');
+const { ObjectId } = require('mongodb');
 const dbClient = require('../utils/db');
+const redisClient = require('../utils/redis');
 
 /**
  * postNew - callback for route POST /users
@@ -27,4 +29,21 @@ async function postNew(req, res) {
   if (user) res.status(201).json({ id: user.ops[0]._id, email: user.ops[0].email });
   else res.status(500).end('Could not create user');
 }
-module.exports = postNew;
+
+/** getMe - retrieves the user that is currently signed-in with its connection token
+ If user is found with the correct token, it sends the user's _id and email back.
+   Header params:
+     - X-token: token used as connection when user signs-in.
+ */
+async function getMe(req, res) {
+  const key = req.headers['x-token'];
+  // get user id from token key
+  const userId = await redisClient.get(`auth_${key}`);
+  if (userId) {
+    // get user in db with user id
+    const user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
+    res.json({ id: user._id, email: user.email });
+  } else res.status(401).json({ error: 'Unauthorized' });
+}
+
+module.exports = { postNew, getMe };
