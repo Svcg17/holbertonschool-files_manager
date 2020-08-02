@@ -132,4 +132,54 @@ async function getIndex(req, res) {
   else res.status(404).json({ error: 'Not Found' });
 }
 
-module.exports = { postUpload, getShow, getIndex };
+/** getPublish - Callback for PUT files/id/publish
+  sets isPublic to true on a file document given its id
+
+  Header params:
+    - x-token: connection token created when user signs-in
+  Request params:
+    - id: id of document to modify
+ */
+async function putPublish(req, res) {
+  const key = req.headers['x-token']; // get token from header
+  const userId = await redisClient.get(`auth_${key}`);
+
+  let user = ''; // find and store user
+  if (userId) user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
+  else res.status(401).json({ error: 'Unauthorized' });
+
+  const docId = req.params.id;
+  const doc = await dbClient.client.collection('files').findOne({ _id: ObjectId(docId), userId: user._id });
+  if (doc) {
+    doc.isPublic = true;
+    res.json(doc);
+  } else res.status(401).json({ error: 'Not found' });
+}
+
+/** putUnpublish - Callback for PUT /files/:id/unpublish
+  sets isPublic to false on a file document given its id
+
+  Header params:
+    - x-token: connection token created when user signs-in
+  Request params:
+    - id: id of the document to modify
+ */
+async function putUnpublish(req, res) {
+  const key = req.headers['x-token']; // get token from header
+  const userId = await redisClient.get(`auth_${key}`);
+
+  let user = ''; // find and store user
+  if (userId) user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
+  else res.status(401).json({ error: 'Unauthorized' });
+
+  const docId = req.params.id;
+  const doc = await dbClient.client.collection('files').findOne({ _id: ObjectId(docId), userId: user._id });
+  if (doc) {
+    doc.isPublic = false;
+    res.json(doc);
+  } else res.status(401).json({ error: 'Not found' });
+}
+
+module.exports = {
+  postUpload, getShow, getIndex, putPublish, putUnpublish,
+};
