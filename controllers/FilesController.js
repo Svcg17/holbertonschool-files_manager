@@ -6,7 +6,8 @@ const redisClient = require('../utils/redis');
 
 /** postUpload - controller for route POST /files
   Creates a file or a folder on the path `/temp/files_manager/*` containing data.
-
+   Header params:
+     - x-token: connection token created when user signs-in
    JSON body:
      - name: name of the file
      - type: folder | file | image
@@ -51,7 +52,6 @@ async function postUpload(req, res) {
 
   // check if /tmp/files_manager exists, if not create it
   if (!fs.existsSync('/tmp/files_manager')) fs.mkdirSync('/tmp/files_manager');
-  else console.log('exists');
 
   if (type === 'folder') fs.mkdirSync(path);
   else fs.writeFileSync(path, data);
@@ -67,4 +67,69 @@ async function postUpload(req, res) {
   }
 }
 
-module.exports = { postUpload };
+/** getShow - Callback for GET /files/:id
+  Retrieves a document based on the document's id
+  Header params:
+    - x-token: connection token created when user signs-in
+  Get parameters:
+    - id: document id
+ */
+async function getShow(req, res) {
+  const key = req.headers['x-token']; // get token from header
+  const userId = await redisClient.get(`auth_${key}`);
+  const fileId = req.params.id;
+
+  let user = ''; // find and store user
+  if (userId) user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
+  else res.status(401).json({ error: 'Unauthorized' });
+
+  // find the document with userID and document id (_id)
+  const doc = await dbClient.client.collection('files').findOne({ userId: ObjectId(user._id), _id: ObjectId(fileId) });
+  if (doc) res.json(doc);
+  else res.status(404).json({ error: 'Not found' });
+}
+
+/** getIndex - Callback for GET /files
+  Retrieves all documents of a user.
+
+  Optional query strings:
+    - parentId: filter by a doc's parentId
+    - page: pagination (20 docs per page)
+  Header params:
+   - x-token: connection token created when user signs-in
+ */
+async function getIndex(req, res) {
+  const key = req.headers['x-token']; // get token from header
+  const userId = await redisClient.get(`auth_${key}`);
+
+  let user = ''; // find and store user
+  if (userId) user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
+  else res.status(401).json({ error: 'Unauthorized' });
+
+  let docs = '';
+  let documents = []; // to return
+
+  // if parentId is passed as query string, filter by this id. Otherwise filter by userId
+  if (req.query.parentId) {
+    docs = await dbClient.client.collection('files').find({ parentId: req.query.parentId });
+  } else docs = await dbClient.client.collection('files').find({ userId: ObjectId(user._id) });
+
+  // if page is passed as query string, only get the 20 items of that page
+  if (req.query.page) {
+    const pagination = await dbClient.client.collection('files').aggregate([
+      {
+        $facet: {
+          data: [{ $skip: (req.query.page * 2) }, { $limit: 2 }],
+        },
+      },
+    ], docs);
+    await pagination.forEach((data) => {
+      documents = data.data;
+    });
+  } else await docs.forEach((d) => documents.push(d)); // without pagination
+
+  if (documents) res.json(documents);
+  else res.status(404).json({ error: 'Not Found' });
+}
+
+module.exports = { postUpload, getShow, getIndex };
