@@ -2,7 +2,9 @@ const express = require('express');
 const { getStatus, getStats } = require('../controllers/AppController');
 const { postNew, getMe } = require('../controllers/UsersController');
 const { getConnect, getDisconnect } = require('../controllers/AuthController');
-const { postUpload, getShow, getIndex } = require('../controllers/FilesController');
+const {
+  postUpload, getShow, getIndex, putPublish, putUnpublish,
+} = require('../controllers/FilesController');
 
 const router = express.Router();
 
@@ -23,5 +25,7 @@ router.get('/disconnect', (req, res) => getDisconnect(req, res));
 router.post('/files', (req, res) => postUpload(req, res));
 router.get('/files/:id', (req, res) => getShow(req, res));
 router.get('/files', (req, res) => getIndex(req, res));
+router.put('/files/:id/publish', (req, res) => putPublish(req, res));
+router.put('/files/:id/unpublish', (req, res) => putUnpublish(req, res));
 
 module.exports = router;
