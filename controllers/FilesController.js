@@ -1,6 +1,7 @@
 const fs = require('fs');
 const { ObjectId } = require('mongodb');
 const { v4: uuidv4 } = require('uuid');
+const mime = require('mime-types');
 const dbClient = require('../utils/db');
 const redisClient = require('../utils/redis');
 
@@ -21,7 +22,7 @@ async function postUpload(req, res) {
 
   let user = ''; // find connected user
   if (userId) user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
-
+  // MIGHT NEED TO GUARD USER
   const { name } = req.body; // name
   if (!name) res.status(400).json({ error: 'Missing name' });
 
@@ -180,6 +181,31 @@ async function putUnpublish(req, res) {
   } else res.status(401).json({ error: 'Not found' });
 }
 
+async function getFile(req, res) {
+  const key = req.headers['x-token']; // get token from header
+  const userId = await redisClient.get(`auth_${key}`);
+
+  let user = ''; // find and store user
+  if (userId) user = await dbClient.client.collection('users').findOne({ _id: ObjectId(userId) });
+
+  const docId = req.params.id;
+  const doc = await dbClient.client.collection('files').findOne({ _id: ObjectId(docId) });
+  if (doc) {
+    // if doc is not public, the user must be authenticated in order to read the file
+    if (!doc.isPublic && user === '') res.status(404).json({ error: 'Not Found' });
+    else if (doc.type === 'folder') res.status(400).json({ error: 'A folder doesn\'t have content' });
+    else {
+      fs.readFile(doc.localPath, 'utf-8', (err, data) => {
+        if (err) res.status(401).json({ error: 'Not found' }); // can't read file
+        else {
+          res.setHeader('Content-Type', mime.lookup(doc.name));
+          res.end(data);
+        }
+      });
+    }
+  } else res.status(401).json({ error: 'Not found' }); // doc not found
+}
+
 module.exports = {
-  postUpload, getShow, getIndex, putPublish, putUnpublish,
+  postUpload, getShow, getIndex, putPublish, putUnpublish, getFile,
 };
